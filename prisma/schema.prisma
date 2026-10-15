@@ -1,0 +1,119 @@
+// ==============================================================================
+// Prisma Schema — Team Pulse Hub
+// Configurado com Connection Pooling para Vercel / Neon / Supabase
+// ==============================================================================
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Catálogo e Cache dos Clubes da Série A
+model ClubProfile {
+  id              String   @id @default(uuid())
+  apiTeamId       Int      @unique
+  name            String
+  code            String?
+  country         String   @default("Brazil")
+  founded         Int?
+  logoUrl         String
+  venueName       String?
+  venueCity       String?
+  venueCapacity   Int?
+  venueImageUrl   String?
+  isDefault       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  fixtures        FixtureRecord[]
+  standings       StandingRecord[]
+  userFavorites   UserFavoriteClub[]
+
+  @@index([apiTeamId])
+}
+
+// 2. Preferência do Usuário (Time Favorito / Pinned Team)
+model UserFavoriteClub {
+  id              String      @id @default(uuid())
+  sessionId       String      @unique
+  clubProfileId   String
+  clubProfile     ClubProfile @relation(fields: [clubProfileId], references: [id], onDelete: Cascade)
+  updatedAt       DateTime    @updatedAt
+
+  @@index([sessionId])
+  @@index([clubProfileId])
+}
+
+// 3. Cache e Snapshot de Partidas do Time
+model FixtureRecord {
+  id              String      @id @default(uuid())
+  apiFixtureId    Int         @unique
+  clubProfileId   String
+  clubProfile     ClubProfile @relation(fields: [clubProfileId], references: [id], onDelete: Cascade)
+  
+  leagueId        Int
+  season          Int
+  round           String
+  date            DateTime
+  statusShort     String      // NS, 1H, HT, 2H, FT
+  statusElapsed   Int?
+  
+  homeTeamId      Int
+  homeTeamName    String
+  homeTeamLogo    String
+  awayTeamId      Int
+  awayTeamName    String
+  awayTeamLogo    String
+  
+  goalsHome       Int?
+  goalsAway       Int?
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([clubProfileId])
+  @@index([date])
+  @@index([apiFixtureId])
+}
+
+// 4. Tabela de Classificação
+model StandingRecord {
+  id              String      @id @default(uuid())
+  clubProfileId   String
+  clubProfile     ClubProfile @relation(fields: [clubProfileId], references: [id], onDelete: Cascade)
+  
+  leagueId        Int
+  season          Int
+  rank            Int
+  points          Int
+  goalsDiff       Int
+  form            String?
+  played          Int
+  win             Int
+  draw            Int
+  lose            Int
+  goalsFor        Int
+  goalsAgainst    Int
+  
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([leagueId, season, rank])
+  @@index([clubProfileId])
+}
+
+// 5. Log de Auditoria de Revalidações de Cache
+model CacheRevalidationLog {
+  id              String   @id @default(uuid())
+  tag             String
+  triggeredBy     String   // "webhook", "manual", "cron"
+  status          String   // "SUCCESS", "REJECTED", "ERROR"
+  createdAt       DateTime @default(now())
+
+  @@index([tag])
+  @@index([createdAt])
+}
